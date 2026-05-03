@@ -1,0 +1,175 @@
+replace_text(
+    absolutePath="C:/Users/adm1/OneDrive - Champlain Regional College/Documents/Database Application Development/Project/flutter_app/lib/browse_screen.dart",
+    oldText='''class _BrowseScreenState extends State<BrowseScreen> {
+  List items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    fetchItems();
+  }
+
+  Future<void> fetchItems() async {
+    try {
+      final response = await http.get(
+        Uri.parse("http://10.0.2.2:8000/items"),
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          items = json.decode(response.body);
+        });
+      } else {
+        print("Failed: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error: $e");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("Browse Items")),
+      body: items.isEmpty
+          ? Center(child: Text("Loading..."))
+          : ListView.builder(
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+
+          return Card(
+            child: ListTile(
+              title: Text(item["title"] ?? ""),
+              subtitle: Text("${item["category"]} • ${item["year"]}"),
+              trailing: Text(item["rating"].toString()),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}''',
+    newText='''class _BrowseScreenState extends State<BrowseScreen> {
+  List items = [];
+  String searchQuery = "";
+  String selectedCategory = "All";
+  
+  // Define categories based on your Games domain
+  final List<String> categories = ["All", "Action", "RPG", "Adventure", "Sports", "Strategy", "Simulation"];
+
+  @override
+  void initState() {
+    super.initState();
+    fetchItems();
+  }
+
+  Future<void> fetchItems() async {
+    try {
+      // Build query parameters for search and category
+      String url = "http://10.0.2.2:8000/items?";
+      if (searchQuery.isNotEmpty) url += "search=$searchQuery&";
+      if (selectedCategory != "All") url += "category=$selectedCategory&";
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        setState(() {
+          items = json.decode(response.body);
+        });
+      } else {
+        print("Failed: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error: $e");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Game Catalog"),
+        bottom: PreferredSize(
+          preferredSize: Size.fromHeight(110.0),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+            child: Column(
+              children: [
+                TextField(
+                  decoration: InputDecoration(
+                    hintText: "Search games...",
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    fillColor: Colors.white,
+                    filled: true,
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      searchQuery = value;
+                    });
+                    fetchItems();
+                  },
+                ),
+                SizedBox(height: 8),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    value: selectedCategory,
+                    underline: SizedBox(),
+                    items: categories.map((String category) {
+                      return DropdownMenuItem(value: category, child: Text(category));
+                    }).toList(),
+                    onChanged: (String? newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          selectedCategory = newValue;
+                        });
+                        fetchItems();
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      body: items.isEmpty
+          ? Center(child: Text("No games found"))
+          : ListView.builder(
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return Card(
+                  margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  child: ListTile(
+                    title: Text(item["title"] ?? "Unknown Title", style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text("${item["category"]} • ${item["year"]}"),
+                    trailing: Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blueAccent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        item["rating"].toString(),
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    onTap: () {
+                      // We will implement navigation to Detail Screen next
+                    },
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}'''
+)
