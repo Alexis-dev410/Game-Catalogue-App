@@ -3,7 +3,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'item_detail_screen.dart';
 import 'add_item_screen.dart';
-import 'dashboard_screen.dart';
 
 class BrowseScreen extends StatefulWidget {
   const BrowseScreen({super.key});
@@ -18,8 +17,9 @@ class _BrowseScreenState extends State<BrowseScreen> {
   String selectedCategory = 'All';
   final TextEditingController _searchController = TextEditingController();
 
+  // Unified Category List
   final List<String> categories = [
-    'All', 'Action', 'RPG', 'Adventure', 'Sports', 'Strategy', 'Simulation', 'Shooter'
+    'All', 'Action', 'RPG', 'Adventure', 'Sports', 'Strategy', 'Simulation', 'Shooter', 'Sandbox', 'Racing', 'Fighting'
   ];
 
   @override
@@ -29,33 +29,40 @@ class _BrowseScreenState extends State<BrowseScreen> {
   }
 
   Future<void> fetchItems() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
     try {
       final Map<String, String> queryParams = {};
       if (_searchController.text.isNotEmpty) {
-        queryParams['search'] = _searchController.text;
+        queryParams['search'] = _searchController.text.trim();
       }
       if (selectedCategory != 'All') {
         queryParams['category'] = selectedCategory;
       }
 
-      // Using Uri.http is more robust as it handles parameter encoding (spaces, etc.)
       final uri = Uri.http('10.0.2.2:8000', '/items', queryParams);
-      
-      final response = await http.get(uri);
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        setState(() {
-          items = json.decode(response.body);
-          isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            items = json.decode(response.body);
+            isLoading = false;
+          });
+        }
       } else {
-        debugPrint("Failed to load items: ${response.statusCode}");
-        setState(() => isLoading = false);
+        _showError("Server returned error: ${response.statusCode}");
       }
     } catch (e) {
-      debugPrint("Error fetching items: $e");
-      setState(() => isLoading = false);
+      _showError("Connection failed. Is the Python backend running?");
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -64,16 +71,6 @@ class _BrowseScreenState extends State<BrowseScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Game Catalog"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bar_chart),
-            tooltip: "Dashboard",
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const DashboardScreen()),
-            ),
-          ),
-        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(110),
           child: Column(
@@ -83,15 +80,22 @@ class _BrowseScreenState extends State<BrowseScreen> {
                 child: TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: "Search by title...",
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.search),
-                      onPressed: fetchItems,
-                    ),
+                    hintText: "Search games...",
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchController.text.isNotEmpty 
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            fetchItems();
+                          },
+                        )
+                      : null,
                     filled: true,
                     fillColor: Colors.white,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.0)),
                   ),
+                  onChanged: (val) => setState(() {}),
                   onSubmitted: (_) => fetchItems(),
                 ),
               ),
@@ -122,39 +126,56 @@ class _BrowseScreenState extends State<BrowseScreen> {
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : items.isEmpty
-              ? const Center(child: Text("No games found."))
-              : RefreshIndicator(
-                  onRefresh: fetchItems,
-                  child: ListView.builder(
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      final item = items[index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        child: ListTile(
-                          title: Text(item["title"] ?? "Unknown", style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text("${item["category"]} • ${item["year"]}"),
-                          trailing: CircleAvatar(
-                            backgroundColor: Colors.blueAccent,
-                            child: Text(item["rating"].toString(), style: const TextStyle(color: Colors.white, fontSize: 12)),
-                          ),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ItemDetailScreen(item: Map<String, dynamic>.from(item)),
+          : RefreshIndicator(
+              onRefresh: fetchItems,
+              child: items.isEmpty
+                  ? const Center(child: Text("No games found."))
+                  : ListView.builder(
+                      itemCount: items.length,
+                      padding: const EdgeInsets.only(bottom: 80),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          elevation: 2,
+                          child: ListTile(
+                            title: Text(item["title"] ?? "Unknown", style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text("${item["category"]} • ${item["year"]}"),
+                            trailing: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.indigo.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                item["rating"]?.toString() ?? "0.0",
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo),
+                              ),
                             ),
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ItemDetailScreen(item: Map<String, dynamic>.from(item)),
+                                ),
+                              );
+                              fetchItems();
+                            },
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+                        );
+                      },
+                    ),
+            ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AddItemScreen()),
-        ).then((_) => fetchItems()),
+        backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        onPressed: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AddItemScreen()),
+          );
+          if (result == true) fetchItems();
+        },
         child: const Icon(Icons.add),
       ),
     );

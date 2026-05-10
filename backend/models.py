@@ -14,3 +14,4 @@ class Item(Base):
     rating = Column(Float, nullable=False)
     description = Column(Text)
     created_at = Column(TIMESTAMP, server_default=func.now())
+    platform = Column(String(100), nullable=True)
